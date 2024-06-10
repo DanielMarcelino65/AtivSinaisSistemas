@@ -1,72 +1,125 @@
+import numpy as np
 import sympy as sp
+from scipy.integrate import solve_ivp
 import os
 
-def zeroInputFirstDegreeODE():
+sp.init_printing(pretty_print=True)
+
+def firstOrderModel(t, y, a, b):
+    dydt = a * y + b * t
+    return dydt
+
+def solveFirstOrderODE(a, b, y0):
+    timeSpan = [0, 10]
+    
+    sol = solve_ivp(firstOrderModel, timeSpan, [y0], args=(a, b))
+    
+    t = sol.t
+    y = sol.y[0]
+    
+    # print("t:", t)
+    # print("y:", y)
+
+    tSymbol = sp.symbols('t')
+    ySymbol = sp.Function('y')(tSymbol)
+    equation = sp.Eq(ySymbol.diff(tSymbol) - a * ySymbol - b * tSymbol, 0)
+
+    solution = sp.dsolve(equation, ySymbol, ics={ySymbol.subs(tSymbol, 0): y0})
+    
+    print("\nGeneral solution (symbolic):")
+    print(solution)
+    
+    print("Value of C1:", y[0])
+        
+def secondOrderModel(t, y, a, b, c, d):
+    dydt = y[1]
+    dzdt = -(b * y[1] + c * y[0] + d) / a
+    return [dydt, dzdt]
+
+def solveSecondOrderODE(a, b, c, d, y0, yd0):
+    y0 = [y0, yd0] 
+    
+    timeSpan = [0, 10]
+    
+    sol = solve_ivp(secondOrderModel, timeSpan, y0, args=(a, b, c, d))
+    
+    t = sol.t
+    y = sol.y[0]
+    
+    print("Values of C1 and C2 (from numerical solution):")
+    print("C1 (y(0)): ", y0[0])
+    print("C2 (y'(0)): ", y0[1])
+    
+    tSymbol = sp.symbols('t')
+    ySymbol = sp.Function('y')(tSymbol)
+    equation = sp.Eq(a * ySymbol.diff(tSymbol, tSymbol) + b * ySymbol.diff(tSymbol) + c * ySymbol + d, 0)
+    
+    solution = sp.dsolve(equation)
+    
+    print("\nGeneral solution (symbolic):")
+    print(solution)
+    
+    constants = sp.symbols('C1 C2')
+    
+    constantsValues = [solution.subs(constant, sp.symbols(str(constant))) for constant in constants]
+    
+    print("\nValues of C1 and C2 (from symbolic solution):")
+    for i, constant in enumerate(constants):
+        print(f"{constant}: {constantsValues[i]}")
+
+
+def zeroInputFirstDegreeODE(a, b, y0):
     t = sp.symbols('t')
     y = sp.Function('y')(t)
     
-    # Define a EDO
-    ode = sp.Eq(y.diff(t) + 3 * y, 0)
-    print("A equação diferencial é:")
+    ode = sp.Eq(a * y.diff(t) + b * y, 0)  
+    print("The differential equation is:")
     sp.pprint(ode)
     print()
     
-    # Resolve a EDO para obter a solução geral
     general_solution = sp.dsolve(ode)
-    print("A solução geral da EDO é:")
+    print("The general solution to the ODE is:")
     sp.pprint(general_solution)
     print()
     
-    # Condição inicial
-    y0 = 2
-    
-    # Extrai o símbolo da constante C1
     C1 = sp.symbols('C1')
     
-    # Substitui t=0 e y(0)=y0 na solução geral e resolve para C1
     initial_condition_eq = general_solution.rhs.subs(t, 0) - y0
-    print("Definindo a condição inicial:")
+    print("Setting initial condition:")
     sp.pprint(initial_condition_eq)
     print()
     
     constant_solution = sp.solve(initial_condition_eq, C1)
     
     if constant_solution:
-        C1_val = constant_solution[0]
-        particular_solution = general_solution.subs(C1, C1_val)
-        print("C1 =", C1_val)
-        print("\nA solução particular da EDO com a condição inicial dada é:")
+        C1value = constant_solution[0]
+        particular_solution = general_solution.subs(C1, C1value)
+        print("C1 =", C1value)
+        print("\nThe particular solution to the ODE with the given initial condition is:")
         sp.pprint(particular_solution)
     else:
-        print("Erro: Não foi possível encontrar uma solução para a constante.")
+        print("Error: Unable to find a solution for the constant.")
 
-def zeroInputSecondDegreeODE():
+def zeroInputSecondDegreeODE(a, b, c, y0, dy0):
     t = sp.symbols('t')
     y = sp.Function('y')(t)
     
-    # Define a EDO
-    ode = sp.Eq(y.diff(t, t) + 2 * y.diff(t) + y, 0)
-    print("A equação diferencial é:")
+    ode = sp.Eq(a * y.diff(t, t) + b * y.diff(t) + c * y, 0)  
+    print("The differential equation is:")
     sp.pprint(ode)
     print()
     
-    # Resolve a EDO para obter a solução geral
     general_solution = sp.dsolve(ode)
-    print("A solução geral da EDO é:")
+    print("The general solution to the ODE is:")
     sp.pprint(general_solution)
     print()
     
-    # Condições iniciais
-    y0 = 1
-    dy0 = 0
-    
-    # Encontra os símbolos das constantes (C1, C2) e resolve para elas usando as condições iniciais
     constants = list(general_solution.rhs.free_symbols)
     C1, C2 = constants[0], constants[1]
     
     eq1 = general_solution.rhs.subs(t, 0) - y0
     eq2 = sp.diff(general_solution.rhs, t).subs(t, 0) - dy0
-    print("Definindo as condições iniciais:")
+    print("Setting initial conditions:")
     sp.pprint(eq1)
     sp.pprint(eq2)
     print()
@@ -74,103 +127,121 @@ def zeroInputSecondDegreeODE():
     constants_solution = sp.solve((eq1, eq2), (C1, C2))
     
     if constants_solution:
-        C1_val = constants_solution[C1]
-        C2_val = constants_solution[C2]
+        C1value = constants_solution[C1]
+        C2value = constants_solution[C2]
         particular_solution = general_solution.subs(constants_solution)
-        print("C1 =", C1_val.evalf())  # Avalia C1 para um valor específico
-        print("C2 =", C2_val.evalf())  # Avalia C2 para um valor específico
-        print("\nA solução particular da EDO com as condições iniciais dadas é:")
+        print("C1 =", C1value.evalf())  
+        print("C2 =", C2value.evalf())  
+        print("\nThe particular solution to the ODE with the given initial conditions is:")
         sp.pprint(particular_solution)
     else:
-        print("Erro: Não foi possível encontrar uma solução para as constantes.")
+        print("Error: Unable to find a solution for the constants.")
 
-def zeroStateFirstDegreeODE():
+def zeroStateFirstDegreeODE(a, b, c, forcing_function):
     t, s = sp.symbols('t s')
     Y = sp.Function('Y')(s)
     y = sp.Function('y')(t)
     
-    # Define a função de excitação
-    f = t  # Por exemplo, vamos tomar f(t) = t
-    
-    # Define a transformada de Laplace da função de excitação
-    F = sp.laplace_transform(f, t, s, noconds=True)
-    print("Transformada de Laplace da função de excitação F(s):")
+    F = sp.laplace_transform(forcing_function, t, s, noconds=True)
+    print("Laplace transform of the forcing function F(s):")
     sp.pprint(F)
     print()
     
-    # Define a transformada de Laplace da EDO
-    ode_laplace = sp.Eq(s * Y - 0 + 3 * Y, F)  # Supondo y(0) = 0 para resposta ao estado zero
-    print("Transformada de Laplace da equação diferencial:")
-    sp.pprint(ode_laplace)
+    odeLaplace = sp.Eq(a * s * Y - a * 0 + b * Y + c, F)   
+    print("Laplace transform of the differential equation:")
+    sp.pprint(odeLaplace)
     print()
     
-    # Resolve para Y(s)
-    Y_sol = sp.solve(ode_laplace, Y)[0]
-    print("Resolvendo para Y(s):")
-    sp.pprint(Y_sol)
+    YSol = sp.solve(odeLaplace, Y)[0]
+    print("Solving for Y(s):")
+    sp.pprint(YSol)
     print()
     
-    # Toma a transformada inversa de Laplace para encontrar y(t)
-    y_sol = sp.inverse_laplace_transform(Y_sol, s, t)
-    print("Transformada inversa de Laplace para encontrar y(t):")
-    sp.pprint(y_sol)
-    print("\nA solução do estado zero da EDO é:")
-    sp.pprint(y_sol)
+    ySol = sp.inverse_laplace_transform(YSol, s, t)
+    print("Inverse Laplace transform to find y(t):")
+    sp.pprint(ySol)
+    print("\nThe zero state solution to the ODE is:")
+    sp.pprint(ySol)
 
-def zeroStateSecondDegreeODE():
+def zeroStateSecondDegreeODE(a, b, c, d, forcing_function):
     t, s = sp.symbols('t s')
     Y = sp.Function('Y')(s)
     y = sp.Function('y')(t)
     
-    # Define a função de excitação
-    f = t  # Por exemplo, vamos tomar f(t) = t
-    
-    # Define a transformada de Laplace da função de excitação
-    F = sp.laplace_transform(f, t, s, noconds=True)
-    print("Transformada de Laplace da função de excitação F(s):")
+    F = sp.laplace_transform(forcing_function, t, s, noconds=True)
+    print("Laplace transform of the forcing function F(s):")
     sp.pprint(F)
     print()
     
-    # Define a transformada de Laplace da EDO
-    ode_laplace = sp.Eq(s**2 * Y - s*0 - 0 + 2 * s * Y + Y, F)  # Supondo y(0) = 0 e y'(0) = 0 para resposta ao estado zero
-    print("Transformada de Laplace da equação diferencial:")
-    sp.pprint(ode_laplace)
+    odeLaplace = sp.Eq(a * s**2 * Y - a * s * 0 - a * 0 + b * s * Y + c * Y + d, F)   
+    print("Laplace transform of the differential equation:")
+    sp.pprint(odeLaplace)
     print()
     
-    # Resolve para Y(s)
-    Y_sol = sp.solve(ode_laplace, Y)[0]
-    print("Resolvendo para Y(s):")
-    sp.pprint(Y_sol)
+    YSol = sp.solve(odeLaplace, Y)[0]
+    print("Solving for Y(s):")
+    sp.pprint(YSol)
     print()
     
-    # Toma a transformada inversa de Laplace para encontrar y(t)
-    y_sol = sp.inverse_laplace_transform(Y_sol, s, t)
-    print("Transformada inversa de Laplace para encontrar y(t):")
-    sp.pprint(y_sol)
-    print("\nA solução do estado zero da EDO é:")
-    sp.pprint(y_sol)
+    ySol = sp.inverse_laplace_transform(YSol, s, t)
+    print("Inverse Laplace transform to find y(t):")
+    sp.pprint(ySol)
+    print("\nThe zero state solution to the ODE is:")
+    sp.pprint(ySol)
 
 def main():
     while True:
-        print('(1) EDO de Primeira Ordem com Entrada Nula')
-        print('(2) EDO de Segunda Ordem com Entrada Nula')
-        print('(3) EDO de Primeira Ordem com Estado Nulo')
-        print('(4) EDO de Segunda Ordem com Estado Nulo')
+        print('(1) Zero Input First Degree ODE')
+        print('(2) Zero Input Second Degree ODE')
+        print('(3) Zero State First Degree ODE')
+        print('(4) Zero State Second Degree ODE')
+        print('(5) General First Degree ODE')
+        print('(6) General Second Degree ODE')
         usrInput = input()
 
         os.system('cls')
 
-        if int(usrInput) in [1, 2, 3, 4]:
+        if int(usrInput) in [1, 2, 3, 4, 5, 6]:
             break
 
     if int(usrInput) == 1:
-        zeroInputFirstDegreeODE()
+        a = float(input("Enter the coefficient a: "))
+        b = float(input("Enter the coefficient b: "))
+        y0 = float(input("Enter the initial condition y(0): "))
+        zeroInputFirstDegreeODE(a, b, y0)
     elif int(usrInput) == 2:
-        zeroInputSecondDegreeODE()
+        a = float(input("Enter the coefficient a: "))
+        b = float(input("Enter the coefficient b: "))
+        c = float(input("Enter the coefficient c: "))
+        y0 = float(input("Enter the initial condition y(0): "))
+        dy0 = float(input("Enter the initial condition y'(0): "))
+        zeroInputSecondDegreeODE(a, b, c, y0, dy0)
     elif int(usrInput) == 3:
-        zeroStateFirstDegreeODE()
+        a = float(input("Enter the coefficient a: "))
+        b = float(input("Enter the coefficient b: "))
+        c = float(input("Enter the coefficient c: "))
+        forcing_function = input("Enter the forcing function (in terms of t): ")
+        zeroStateFirstDegreeODE(a, b, c, forcing_function)
     elif int(usrInput) == 4:
-        zeroStateSecondDegreeODE()
+        a = float(input("Enter the coefficient a: "))
+        b = float(input("Enter the coefficient b: "))
+        c = float(input("Enter the coefficient c: "))
+        d = float(input("Enter the coefficient d: "))
+        forcing_function = input("Enter the forcing function (in terms of t): ")
+        zeroStateSecondDegreeODE(a, b, c, d, forcing_function)
+    elif int(usrInput) == 5:
+        a = float(input("Enter the coefficient a: "))
+        b = float(input("Enter the coefficient b: "))
+        y0 = float(input("Enter the initial condition y(0): "))
+        solveFirstOrderODE(a, b, y0)
+    elif int(usrInput) == 6:
+        a = float(input("Enter the coefficient a: "))
+        b = float(input("Enter the coefficient b: "))
+        c = float(input("Enter the coefficient c: "))
+        d = float(input("Enter the coefficient d: "))
+        y0 = float(input("Enter the initial condition y(0): "))
+        dy0 = float(input("Enter the initial condition y'(0): "))
+        solveSecondOrderODE(a, b, c, d, y0, dy0)
 
 if __name__ == "__main__":
     main()
